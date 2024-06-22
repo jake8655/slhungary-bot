@@ -96,7 +96,7 @@ async fn bug_report(ctx: &Context, msg: &Message) {
 
     config.lock().await.data_json.increment_bug_report_count();
 
-    let embed = CreateMessage::new().embed(
+    let user_embed = CreateMessage::new().embed(
         CreateEmbed::new()
             .author(
                 CreateEmbedAuthor::new(&msg.author.name)
@@ -115,7 +115,7 @@ async fn bug_report(ctx: &Context, msg: &Message) {
         error!("Error deleting message: {e:?}");
     }
 
-    if let Err(e) = msg.channel_id.send_message(&ctx.http, embed).await {
+    if let Err(e) = msg.channel_id.send_message(&ctx.http, user_embed).await {
         error!("Error sending message: {e:?}");
     };
 
