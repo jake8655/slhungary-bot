@@ -47,11 +47,20 @@ fn truncate(s: &str, max_chars: usize) -> &str {
     }
 }
 
+fn sanitize_name(name: &str) -> String {
+    name.replace('\\', "\\\\") // for crazy escaping tactics
+        .replace('*', "\\*") // bold, italic
+        .replace('_', "\\_") // underline
+        .replace('~', "\\~") // strikethrough
+        .replace(':', "\\:") // emojis
+        .replace('`', "\\`") // code
+}
+
 async fn manage_server_status_message(ctx: Context) {
     let client_data = ctx.data.read().await;
     let (_, config) = client_data.get::<ClientData>().unwrap();
 
-    let embed = CreateEmbed::new()
+    let mut embed = CreateEmbed::new()
         .title(format!("{} | Szerver Státusz", BRAND_NAME))
         .description(format!("A <#{}> csatornában mindig értesülsz a szerver aktuális elérhetőségéről és állapotáról!", config.lock().await.status_channel_id))
         .footer(CreateEmbedFooter::new(BRAND_NAME_SHORT))
@@ -64,10 +73,22 @@ async fn manage_server_status_message(ctx: Context) {
 
     let forever = task::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(10));
+        let mut emoji = "⚫";
 
         loop {
             interval.tick().await;
+
+            embed = embed.footer(CreateEmbedFooter::new(format!(
+                "{} {}",
+                emoji, BRAND_NAME_SHORT
+            )));
             send_or_edit_message(context_arc.clone(), embed.clone()).await;
+
+            emoji = match emoji {
+                "⚫" => "⚪",
+                "⚪" => "⚫",
+                _ => "⚫",
+            };
         }
     });
 
@@ -100,8 +121,11 @@ async fn send_or_edit_message(ctx: Arc<Context>, mut embed: CreateEmbed) {
                 ];
 
                 for (i, player) in players.iter().enumerate() {
-                    player_values[(i + 1) % 3] +=
-                        &format!("{} ({}ms)\n", truncate(&player.name, 12), player.ping);
+                    player_values[(i + 1) % 3] += &format!(
+                        "{} *({}ms)*\n",
+                        sanitize_name(truncate(&player.name, 12)),
+                        player.ping
+                    );
                 }
 
                 let player_fields = player_values
@@ -109,7 +133,7 @@ async fn send_or_edit_message(ctx: Arc<Context>, mut embed: CreateEmbed) {
                     .filter(|s| !s.is_empty())
                     .map(|s| ("\u{200b}", s, true));
 
-                embed = embed.fields(player_fields);
+                embed = embed.fields(player_fields).timestamp(Timestamp::now());
             }
         }
         Err(e) => {
