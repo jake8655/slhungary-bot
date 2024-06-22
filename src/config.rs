@@ -10,6 +10,7 @@ pub struct Config {
     pub bug_report_channel_id: u64,
     pub bug_log_channel_id: u64,
     pub status_channel_id: u64,
+    pub cfx_status_channel_id: u64,
     pub guild_id: u64,
     pub help_channel_id: u64,
     pub fivem_ip: String,
@@ -23,6 +24,8 @@ pub struct DataJson {
     pub bug_report_count: u16,
     #[serde(rename = "statusMessageId")]
     pub status_message_id: Option<u64>,
+    #[serde(rename = "cfxStatusMessageId")]
+    pub cfx_status_message_id: Option<u64>,
 }
 
 impl Default for DataJson {
@@ -37,6 +40,7 @@ impl DataJson {
             suggestion_count: 0,
             bug_report_count: 0,
             status_message_id: None,
+            cfx_status_message_id: None,
         }
     }
 
@@ -85,6 +89,10 @@ impl DataJson {
     pub fn set_status_message_id(&mut self, id: u64) {
         self.status_message_id = Some(id);
     }
+
+    pub fn set_cfx_status_message_id(&mut self, id: u64) {
+        self.cfx_status_message_id = Some(id);
+    }
 }
 
 impl Default for Config {
@@ -120,6 +128,10 @@ impl Config {
             .expect("Expected `HELP_CHANNEL_ID` in the environment")
             .parse::<u64>()
             .expect("Expected `HELP_CHANNEL_ID` to be a number");
+        let cfx_status_channel_id = env::var("CFX_STATUS_CHANNEL_ID")
+            .expect("Expected `CFX_STATUS_CHANNEL_ID` in the environment")
+            .parse::<u64>()
+            .expect("Expected `CFX_STATUS_CHANNEL_ID` to be a number");
         let fivem_ip = env::var("FIVEM_IP").expect("Expected `FIVEM_IP` in the environment");
 
         Self {
@@ -129,6 +141,7 @@ impl Config {
             bug_report_channel_id,
             bug_log_channel_id,
             status_channel_id,
+            cfx_status_channel_id,
             guild_id,
             help_channel_id,
             fivem_ip,

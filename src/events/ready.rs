@@ -25,6 +25,7 @@ use crate::BRAND_NAME;
 use crate::BRAND_NAME_SHORT;
 use crate::BRAND_WEBSITE;
 use crate::ERROR_COLOR;
+use crate::SUCCESS_COLOR;
 
 pub struct ReadyHandler;
 
@@ -36,7 +37,12 @@ impl EventHandler for ReadyHandler {
         // Set activity to Do Not Disturb
         ctx.dnd();
 
-        manage_server_status_message(ctx).await;
+        let context_arc = Arc::new(ctx);
+
+        tokio::join!(
+            manage_server_status_message(context_arc.clone()),
+            manage_cfx_status_message(context_arc.clone())
+        );
     }
 }
 
@@ -56,20 +62,18 @@ fn sanitize_name(name: &str) -> String {
         .replace('`', "\\`") // code
 }
 
-async fn manage_server_status_message(ctx: Context) {
+async fn manage_cfx_status_message(ctx: Arc<Context>) {
     let client_data = ctx.data.read().await;
     let (_, config) = client_data.get::<ClientData>().unwrap();
 
     let mut embed = CreateEmbed::new()
-        .title(format!("{} | Szerver Státusz", BRAND_NAME))
-        .description(format!("A <#{}> csatornában mindig értesülsz a szerver aktuális elérhetőségéről és állapotáról!", config.lock().await.status_channel_id))
+        .title("CFX Státusz")
+        .description(format!("A <#{}> csatornában mindig értesülsz a [**CFX**](https://status.cfx.re) szolgáltatások aktuális státuszáról!", config.lock().await.cfx_status_channel_id))
         .footer(CreateEmbedFooter::new(BRAND_NAME_SHORT))
         .timestamp(Timestamp::now())
-        .color(BRAND_COLOR);
+        .color(SUCCESS_COLOR);
 
     drop(client_data);
-
-    let context_arc = Arc::new(ctx);
 
     let forever = task::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(10));
@@ -82,7 +86,7 @@ async fn manage_server_status_message(ctx: Context) {
                 "{} {}",
                 emoji, BRAND_NAME_SHORT
             )));
-            send_or_edit_message(context_arc.clone(), embed.clone()).await;
+            send_or_edit_cfx_status_message(ctx.clone(), embed.clone()).await;
 
             emoji = match emoji {
                 "⚫" => "⚪",
@@ -95,7 +99,129 @@ async fn manage_server_status_message(ctx: Context) {
     forever.await.expect("Expected to spawn task");
 }
 
-async fn send_or_edit_message(ctx: Arc<Context>, mut embed: CreateEmbed) {
+async fn manage_server_status_message(ctx: Arc<Context>) {
+    let client_data = ctx.data.read().await;
+    let (_, config) = client_data.get::<ClientData>().unwrap();
+
+    let mut embed = CreateEmbed::new()
+        .title(format!("{} | Szerver Státusz", BRAND_NAME))
+        .description(format!("A <#{}> csatornában mindig értesülsz a szerver aktuális elérhetőségéről és állapotáról!", config.lock().await.status_channel_id))
+        .footer(CreateEmbedFooter::new(BRAND_NAME_SHORT))
+        .timestamp(Timestamp::now())
+        .color(BRAND_COLOR);
+
+    drop(client_data);
+
+    let forever = task::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(10));
+        let mut emoji = "⚫";
+
+        loop {
+            interval.tick().await;
+
+            embed = embed.footer(CreateEmbedFooter::new(format!(
+                "{} {}",
+                emoji, BRAND_NAME_SHORT
+            )));
+            send_or_edit_server_status_message(ctx.clone(), embed.clone()).await;
+
+            emoji = match emoji {
+                "⚫" => "⚪",
+                "⚪" => "⚫",
+                _ => "⚫",
+            };
+        }
+    });
+
+    forever.await.expect("Expected to spawn task");
+}
+
+async fn send_or_edit_cfx_status_message(ctx: Arc<Context>, mut embed: CreateEmbed) {
+    let client_data = ctx.data.read().await;
+    let (_, config) = client_data.get::<ClientData>().unwrap();
+
+    let response = get_cfx_status().await;
+
+    match response {
+        Ok(status) => {
+            embed = embed.fields(vec![("Globális Státusz:", "✅ Elérhető", false)]);
+
+            let status_fields = status
+                .components
+                .iter()
+                .filter(|c| {
+                    c.name != "Server List Frontend"
+                        && c.name != "RedM"
+                        && c.name != "\"Runtime\""
+                        && c.name != "IDMS"
+                })
+                .map(|c| {
+                    (
+                        &c.name,
+                        match c.status.as_str() {
+                            "operational" => "✔ Elérhető",
+                            _ => "❌ Nem elérhető",
+                        },
+                        true,
+                    )
+                });
+
+            embed = embed.fields(status_fields).timestamp(Timestamp::now());
+        }
+        Err(e) => {
+            error!("Error getting CFX status: {e:?}");
+
+            embed = embed
+                .fields(vec![("Globális Státusz:", "❌ Nem elérhető", true)])
+                .timestamp(Timestamp::now())
+                .color(ERROR_COLOR);
+        }
+    }
+
+    let mut locked_config = config.lock().await;
+
+    let channel = ctx
+        .http
+        .get_channel(ChannelId::new(locked_config.cfx_status_channel_id))
+        .await
+        .expect("Expected to find the CFX status channel")
+        .guild()
+        .expect("Expected the CFX status channel to be in a guild");
+
+    match locked_config.data_json.cfx_status_message_id {
+        Some(id) => {
+            let message = EditMessage::new().embed(embed);
+
+            match channel.edit_message(&ctx.http, id, message).await {
+                Ok(message) => info!(
+                    "Edited CFX status message with id: {}",
+                    message.id.to_string()
+                ),
+                Err(e) => error!("Error editing message: {e:?}"),
+            }
+        }
+        None => {
+            let message = CreateMessage::new().embed(embed);
+
+            match channel.send_message(&ctx.http, message).await {
+                Ok(message) => {
+                    locked_config
+                        .data_json
+                        .set_cfx_status_message_id(u64::from(message.id));
+                    locked_config.data_json.save();
+
+                    info!(
+                        "Created new CFX status message with id: {}",
+                        message.id.to_string()
+                    );
+                }
+                Err(e) => error!("Error sending message: {e:?}"),
+            }
+        }
+    };
+}
+
+async fn send_or_edit_server_status_message(ctx: Arc<Context>, mut embed: CreateEmbed) {
     let client_data = ctx.data.read().await;
     let (_, config) = client_data.get::<ClientData>().unwrap();
 
@@ -141,6 +267,7 @@ async fn send_or_edit_message(ctx: Arc<Context>, mut embed: CreateEmbed) {
 
             embed = embed
                 .fields(vec![("Szerver Státusz:", "❌ Nem elérhető", true)])
+                .timestamp(Timestamp::now())
                 .color(ERROR_COLOR);
         }
     }
@@ -191,7 +318,7 @@ async fn send_or_edit_message(ctx: Arc<Context>, mut embed: CreateEmbed) {
                 Ok(message) => {
                     locked_config
                         .data_json
-                        .set_status_message_id(message.id.to_string().parse::<u64>().unwrap());
+                        .set_status_message_id(u64::from(message.id));
                     locked_config.data_json.save();
 
                     info!(
@@ -239,4 +366,24 @@ async fn get_players(ctx: &Context) -> Result<(Box<[Player]>, ServerInfo)> {
         .await?;
 
     Ok((players, server_info))
+}
+
+#[derive(Deserialize)]
+struct CFXStatus {
+    components: Box<[Component]>,
+}
+
+#[derive(Deserialize)]
+struct Component {
+    name: String,
+    status: String,
+}
+
+async fn get_cfx_status() -> Result<CFXStatus> {
+    let response = reqwest::get("https://status.cfx.re/api/v2/summary.json")
+        .await?
+        .json::<CFXStatus>()
+        .await?;
+
+    Ok(response)
 }

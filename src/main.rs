@@ -26,6 +26,7 @@ impl TypeMapKey for ClientData {
 pub const BRAND_COLOR: Color = Color::from_rgb(33, 121, 227);
 pub const WARNING_COLOR: Color = Color::from_rgb(172, 20, 20);
 pub const ERROR_COLOR: Color = Color::from_rgb(227, 46, 36);
+pub const SUCCESS_COLOR: Color = Color::from_rgb(49, 214, 69);
 pub const BRAND_ICON: &str =
     "https://cdn.discordapp.com/attachments/766990340212785162/1253416891096240168/slhungary.png";
 pub const BRAND_NAME: &str = "Smoke Life RolePlay";
