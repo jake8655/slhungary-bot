@@ -7,7 +7,10 @@ pub struct ReadyHandler;
 
 #[async_trait]
 impl EventHandler for ReadyHandler {
-    async fn ready(&self, _ctx: Context, ready: Ready) {
+    async fn ready(&self, ctx: Context, ready: Ready) {
         info!("{} is online!", ready.user.name);
+
+        // Set activity to Do Not Disturb
+        ctx.dnd();
     }
 }
