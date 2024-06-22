@@ -9,14 +9,20 @@ pub struct Config {
     pub suggestions_channel_id: u64,
     pub bug_report_channel_id: u64,
     pub bug_log_channel_id: u64,
+    pub status_channel_id: u64,
+    pub guild_id: u64,
+    pub help_channel_id: u64,
+    pub fivem_ip: String,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct DataJson {
-    #[serde(rename(deserialize = "suggestionCount", serialize = "suggestionCount"))]
+    #[serde(rename = "suggestionCount")]
     pub suggestion_count: u16,
-    #[serde(rename(deserialize = "bugReportCount", serialize = "bugReportCount"))]
+    #[serde(rename = "bugReportCount")]
     pub bug_report_count: u16,
+    #[serde(rename = "statusMessageId")]
+    pub status_message_id: Option<u64>,
 }
 
 impl Default for DataJson {
@@ -30,6 +36,7 @@ impl DataJson {
         Self {
             suggestion_count: 0,
             bug_report_count: 0,
+            status_message_id: None,
         }
     }
 
@@ -74,6 +81,10 @@ impl DataJson {
     pub fn increment_bug_report_count(&mut self) {
         self.bug_report_count += 1;
     }
+
+    pub fn set_status_message_id(&mut self, id: u64) {
+        self.status_message_id = Some(id);
+    }
 }
 
 impl Default for Config {
@@ -97,6 +108,19 @@ impl Config {
             .expect("Expected `BUG_LOG_CHANNEL_ID` in the environment")
             .parse::<u64>()
             .expect("Expected `BUG_LOG_CHANNEL_ID` to be a number");
+        let status_channel_id = env::var("STATUS_CHANNEL_ID")
+            .expect("Expected `STATUS_CHANNEL_ID` in the environment")
+            .parse::<u64>()
+            .expect("Expected `STATUS_CHANNEL_ID` to be a number");
+        let guild_id = env::var("GUILD_ID")
+            .expect("Expected `GUILD_ID` in the environment")
+            .parse::<u64>()
+            .expect("Expected `GUILD_ID` to be a number");
+        let help_channel_id = env::var("HELP_CHANNEL_ID")
+            .expect("Expected `HELP_CHANNEL_ID` in the environment")
+            .parse::<u64>()
+            .expect("Expected `HELP_CHANNEL_ID` to be a number");
+        let fivem_ip = env::var("FIVEM_IP").expect("Expected `FIVEM_IP` in the environment");
 
         Self {
             data_json: DataJson::new().load(),
@@ -104,6 +128,10 @@ impl Config {
             suggestions_channel_id,
             bug_report_channel_id,
             bug_log_channel_id,
+            status_channel_id,
+            guild_id,
+            help_channel_id,
+            fivem_ip,
         }
     }
 }

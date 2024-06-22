@@ -1,5 +1,4 @@
 use serenity::all::ChannelId;
-use serenity::all::Color;
 use tracing::error;
 
 use serenity::all::Context;
@@ -11,6 +10,7 @@ use serenity::all::Message;
 use serenity::all::ReactionType;
 use serenity::all::Timestamp;
 use serenity::async_trait;
+use tracing::info;
 
 use crate::ClientData;
 use crate::BRAND_COLOR;
@@ -83,6 +83,11 @@ async fn suggestion(ctx: &Context, msg: &Message) {
 
             // Save suggestion_count to json file
             config.lock().await.data_json.save();
+
+            info!(
+                "Suggestion message received with id: {}",
+                msg.id.to_string()
+            );
         }
         Err(e) => {
             error!("Error sending message: {e:?}");
@@ -108,7 +113,7 @@ async fn bug_report(ctx: &Context, msg: &Message) {
             ))
             .description("Hibajelentésed sikeresen elküldve!")
             .timestamp(Timestamp::now())
-            .color(Color::DARK_RED),
+            .color(WARNING_COLOR),
     );
 
     if let Err(e) = msg.delete(&ctx.http).await {
@@ -142,7 +147,8 @@ async fn bug_report(ctx: &Context, msg: &Message) {
             .color(WARNING_COLOR),
     );
 
-    if let Err(e) = log_channel.send_message(&ctx.http, log_embed).await {
-        error!("Error sending message: {e:?}");
+    match log_channel.send_message(&ctx.http, log_embed).await {
+        Ok(_) => info!("Bug report received with id: {}", msg.id.to_string()),
+        Err(e) => error!("Error sending message: {e:?}"),
     };
 }
