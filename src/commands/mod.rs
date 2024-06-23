@@ -12,3 +12,5 @@ mod play;
 pub use play::play;
 mod join;
 pub use join::join;
+mod leave;
+pub use leave::leave;
