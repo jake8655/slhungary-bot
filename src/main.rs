@@ -56,7 +56,12 @@ async fn main() {
     let config_clone = config_mutex.clone();
     let poise_framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![commands::ping(), commands::play(), commands::join()],
+            commands: vec![
+                commands::ping(),
+                commands::play(),
+                commands::join(),
+                commands::leave(),
+            ],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
