@@ -1,25 +1,14 @@
-use poise::CreateReply;
-use serenity::all::CreateEmbed;
+use reqwest::Client as HttpClient;
 
-use crate::BRAND_COLOR;
-
-pub struct Data {}
-type Error = Box<dyn std::error::Error + Send + Sync>;
-type Context<'a> = poise::Context<'a, Data, Error>;
-
-/// Ping command
-#[poise::command(slash_command)]
-pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
-    let response = CreateReply::default()
-        .embed(
-            CreateEmbed::new()
-                .title("Ping!")
-                .description("I am alive bro!")
-                .color(BRAND_COLOR),
-        )
-        .ephemeral(true);
-
-    ctx.send(response).await?;
-
-    Ok(())
+pub struct Data {
+    pub http_client: HttpClient,
 }
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Context<'a> = poise::Context<'a, Data, Error>;
+
+mod ping;
+pub use ping::ping;
+mod play;
+pub use play::play;
+mod join;
+pub use join::join;
