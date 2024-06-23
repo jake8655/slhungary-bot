@@ -60,6 +60,7 @@ async fn main() {
                 commands::ping(),
                 commands::play(),
                 commands::leave(),
+                commands::skip(),
             ],
             ..Default::default()
         })
