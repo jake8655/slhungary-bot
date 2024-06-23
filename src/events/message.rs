@@ -12,6 +12,9 @@ use serenity::all::Timestamp;
 use serenity::async_trait;
 use tracing::info;
 
+use crate::utils::delete_message;
+use crate::utils::react_to_message;
+use crate::utils::send_message;
 use crate::ClientData;
 use crate::BRAND_COLOR;
 use crate::BRAND_ICON;
@@ -60,26 +63,24 @@ async fn suggestion(ctx: &Context, msg: &Message) {
             .color(BRAND_COLOR),
     );
 
-    if let Err(e) = msg.delete(&ctx.http).await {
-        error!("Error deleting message: {e:?}");
-    }
+    delete_message(&ctx.http, msg).await;
 
     match msg.channel_id.send_message(&ctx.http, embed).await {
         Ok(suggestion_msg) => {
             // Add upvote reaction
-            if let Err(e) = suggestion_msg
-                .react(&ctx.http, ReactionType::Unicode(String::from("⬆️")))
-                .await
-            {
-                error!("Error reacting to message: {e:?}");
-            }
+            react_to_message(
+                &ctx.http,
+                &suggestion_msg,
+                ReactionType::Unicode(String::from("⬆️")),
+            )
+            .await;
             // Add downvote reaction
-            if let Err(e) = suggestion_msg
-                .react(&ctx.http, ReactionType::Unicode(String::from("⬇️")))
-                .await
-            {
-                error!("Error reacting to message: {e:?}");
-            }
+            react_to_message(
+                &ctx.http,
+                &suggestion_msg,
+                ReactionType::Unicode(String::from("⬇️")),
+            )
+            .await;
 
             // Save suggestion_count to json file
             config.lock().await.data_json.save();
@@ -116,13 +117,9 @@ async fn bug_report(ctx: &Context, msg: &Message) {
             .color(WARNING_COLOR),
     );
 
-    if let Err(e) = msg.delete(&ctx.http).await {
-        error!("Error deleting message: {e:?}");
-    }
+    delete_message(&ctx.http, msg).await;
 
-    if let Err(e) = msg.channel_id.send_message(&ctx.http, user_embed).await {
-        error!("Error sending message: {e:?}");
-    };
+    send_message(&ctx.http, msg.channel_id, user_embed).await;
 
     let log_channel = ctx
         .http
@@ -147,8 +144,10 @@ async fn bug_report(ctx: &Context, msg: &Message) {
             .color(WARNING_COLOR),
     );
 
-    match log_channel.send_message(&ctx.http, log_embed).await {
-        Ok(_) => info!("Bug report received with id: {}", msg.id.to_string()),
-        Err(e) => error!("Error sending message: {e:?}"),
-    };
+    if let Some(sent_message) = send_message(&ctx.http, log_channel.into(), log_embed).await {
+        info!(
+            "Bug report received with id: {}",
+            sent_message.id.to_string()
+        );
+    }
 }

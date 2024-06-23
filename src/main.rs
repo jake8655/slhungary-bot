@@ -1,9 +1,12 @@
+use poise::samples::register_in_guild;
+use songbird::SerenityInit;
 use std::env;
 use std::sync::Arc;
 use tracing::error;
 
 use dotenv::dotenv;
-use serenity::all::ShardManager;
+use reqwest::Client as HttpClient;
+use serenity::all::{GuildId, ShardManager};
 use serenity::{all::Color, prelude::*};
 
 mod config;
@@ -14,8 +17,9 @@ use events::message::MessageHandler;
 use events::ready::ReadyHandler;
 
 mod commands;
-use commands::ping;
 use commands::Data;
+
+pub mod utils;
 
 pub struct ClientData {}
 
@@ -44,18 +48,31 @@ async fn main() {
     let config = Config::new();
     let config_mutex = Arc::new(Mutex::new(config));
 
-    let intents =
-        GatewayIntents::GUILDS | GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::GUILDS
+        | GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILD_VOICE_STATES;
 
+    let config_clone = config_mutex.clone();
     let poise_framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping()],
+            commands: vec![commands::ping(), commands::play(), commands::join()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {})
+                let guild_id = GuildId::from(config_clone.lock().await.guild_id);
+                register_in_guild(&ctx.http, &framework.options().commands, guild_id).await?;
+
+                // For resetting all commands when discord is bugged and has a bunch of old commands registered
+                // guild_id.set_commands(&ctx.http, vec![]).await.unwrap();
+                // Command::set_global_commands(&ctx.http, vec![])
+                //     .await
+                //     .unwrap();
+
+                Ok(Data {
+                    http_client: HttpClient::new(),
+                })
             })
         })
         .build();
@@ -64,6 +81,7 @@ async fn main() {
         .event_handler(ReadyHandler)
         .event_handler(MessageHandler)
         .framework(poise_framework)
+        .register_songbird()
         .await
         .expect("Expected to create client");
 
