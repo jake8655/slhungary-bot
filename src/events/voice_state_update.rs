@@ -2,7 +2,7 @@ use serenity::{
     all::{Context, EventHandler, GuildId, VoiceState},
     async_trait,
 };
-use tracing::error;
+use tracing::{error, info};
 
 pub struct VoiceStateUpdateHandler;
 
