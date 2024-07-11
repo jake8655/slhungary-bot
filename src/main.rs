@@ -1,3 +1,4 @@
+use events::voice_state_update::VoiceStateUpdateHandler;
 use poise::samples::register_in_guild;
 use songbird::SerenityInit;
 use std::env;
@@ -86,6 +87,7 @@ async fn main() {
     let mut client = Client::builder(&token, intents)
         .event_handler(ReadyHandler)
         .event_handler(MessageHandler)
+        .event_handler(VoiceStateUpdateHandler)
         .framework(poise_framework)
         .register_songbird()
         .await
