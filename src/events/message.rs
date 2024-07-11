@@ -32,11 +32,11 @@ impl EventHandler for MessageHandler {
         let client_data = ctx.data.read().await;
         let (_, config) = client_data.get::<ClientData>().unwrap();
 
-        if config.lock().await.suggestions_channel_id.to_string() == msg.channel_id.to_string() {
+        if config.read().await.suggestions_channel_id.to_string() == msg.channel_id.to_string() {
             suggestion(&ctx, &msg).await;
         }
 
-        if config.lock().await.bug_report_channel_id.to_string() == msg.channel_id.to_string() {
+        if config.read().await.bug_report_channel_id.to_string() == msg.channel_id.to_string() {
             bug_report(&ctx, &msg).await;
         }
     }
@@ -46,7 +46,7 @@ async fn suggestion(ctx: &Context, msg: &Message) {
     let client_data = ctx.data.read().await;
     let (_, config) = client_data.get::<ClientData>().unwrap();
 
-    config.lock().await.data_json.increment_suggestion_count();
+    config.write().await.data_json.increment_suggestion_count();
 
     let embed = CreateMessage::new().embed(
         CreateEmbed::new()
@@ -56,7 +56,7 @@ async fn suggestion(ctx: &Context, msg: &Message) {
             )
             .title(format!(
                 "Ötlet - #{}",
-                config.lock().await.data_json.suggestion_count
+                config.read().await.data_json.suggestion_count
             ))
             .description(&msg.content)
             .timestamp(Timestamp::now())
@@ -83,7 +83,7 @@ async fn suggestion(ctx: &Context, msg: &Message) {
             .await;
 
             // Save suggestion_count to json file
-            config.lock().await.data_json.save();
+            config.read().await.data_json.save();
 
             info!(
                 "Suggestion message received with id: {}",
@@ -100,7 +100,7 @@ async fn bug_report(ctx: &Context, msg: &Message) {
     let client_data = ctx.data.read().await;
     let (_, config) = client_data.get::<ClientData>().unwrap();
 
-    config.lock().await.data_json.increment_bug_report_count();
+    config.write().await.data_json.increment_bug_report_count();
 
     let user_embed = CreateMessage::new().embed(
         CreateEmbed::new()
@@ -110,7 +110,7 @@ async fn bug_report(ctx: &Context, msg: &Message) {
             )
             .title(format!(
                 "Hibajelentés - #{}",
-                config.lock().await.data_json.bug_report_count
+                config.read().await.data_json.bug_report_count
             ))
             .description("Hibajelentésed sikeresen elküldve!")
             .timestamp(Timestamp::now())
@@ -123,7 +123,7 @@ async fn bug_report(ctx: &Context, msg: &Message) {
 
     let log_channel = ctx
         .http
-        .get_channel(ChannelId::new(config.lock().await.bug_log_channel_id))
+        .get_channel(ChannelId::new(config.read().await.bug_log_channel_id))
         .await
         .expect("Expected to find the bug log channel")
         .guild()
@@ -137,7 +137,7 @@ async fn bug_report(ctx: &Context, msg: &Message) {
             )
             .title(format!(
                 "Hibajelentés - #{}",
-                config.lock().await.data_json.bug_report_count
+                config.read().await.data_json.bug_report_count
             ))
             .description(&msg.content)
             .timestamp(Timestamp::now())
