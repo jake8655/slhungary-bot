@@ -63,6 +63,8 @@ async fn main() {
                 commands::play(),
                 commands::leave(),
                 commands::skip(),
+                commands::pause(),
+                commands::resume(),
             ],
             ..Default::default()
         })
