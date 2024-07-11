@@ -1,9 +1,14 @@
+use events::voice_state_update::VoiceStateUpdateHandler;
+use poise::samples::register_in_guild;
+use songbird::SerenityInit;
 use std::env;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::error;
 
 use dotenv::dotenv;
-use serenity::all::ShardManager;
+use reqwest::Client as HttpClient;
+use serenity::all::{GuildId, ShardManager};
 use serenity::{all::Color, prelude::*};
 
 mod config;
@@ -14,13 +19,14 @@ use events::message::MessageHandler;
 use events::ready::ReadyHandler;
 
 mod commands;
-use commands::ping;
 use commands::Data;
+
+pub mod utils;
 
 pub struct ClientData {}
 
 impl TypeMapKey for ClientData {
-    type Value = (Arc<ShardManager>, Arc<Mutex<Config>>);
+    type Value = (Arc<ShardManager>, Arc<RwLock<Config>>);
 }
 
 pub const BRAND_COLOR: Color = Color::from_rgb(33, 121, 227);
@@ -42,20 +48,40 @@ async fn main() {
     let token = env::var("DISCORD_TOKEN").expect("Expected `DISCORD_TOKEN` in the environment");
 
     let config = Config::new();
-    let config_mutex = Arc::new(Mutex::new(config));
+    let config_mutex = Arc::new(RwLock::new(config));
 
-    let intents =
-        GatewayIntents::GUILDS | GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
+    let intents = GatewayIntents::GUILDS
+        | GatewayIntents::GUILD_MESSAGES
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILD_VOICE_STATES;
 
+    let config_clone = config_mutex.clone();
     let poise_framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ping()],
+            commands: vec![
+                commands::ping(),
+                commands::play(),
+                commands::leave(),
+                commands::skip(),
+                commands::pause(),
+                commands::resume(),
+            ],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {})
+                let guild_id = GuildId::from(config_clone.read().await.guild_id);
+                register_in_guild(&ctx.http, &framework.options().commands, guild_id).await?;
+
+                // For resetting all commands when discord is bugged and has a bunch of old commands registered
+                // guild_id.set_commands(&ctx.http, vec![]).await.unwrap();
+                // Command::set_global_commands(&ctx.http, vec![])
+                //     .await
+                //     .unwrap();
+
+                Ok(Data {
+                    http_client: HttpClient::new(),
+                })
             })
         })
         .build();
@@ -63,7 +89,9 @@ async fn main() {
     let mut client = Client::builder(&token, intents)
         .event_handler(ReadyHandler)
         .event_handler(MessageHandler)
+        .event_handler(VoiceStateUpdateHandler)
         .framework(poise_framework)
+        .register_songbird()
         .await
         .expect("Expected to create client");
 

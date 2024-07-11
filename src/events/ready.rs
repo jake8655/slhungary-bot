@@ -19,6 +19,8 @@ use tokio::time;
 use tracing::error;
 use tracing::info;
 
+use crate::utils::edit_message;
+use crate::utils::send_message;
 use crate::ClientData;
 use crate::BRAND_COLOR;
 use crate::BRAND_NAME;
@@ -68,7 +70,7 @@ async fn manage_cfx_status_message(ctx: Arc<Context>) {
 
     let mut embed = CreateEmbed::new()
         .title("CFX Státusz")
-        .description(format!("A <#{}> csatornában mindig értesülsz a [**CFX**](https://status.cfx.re) szolgáltatások aktuális státuszáról!", config.lock().await.cfx_status_channel_id))
+        .description(format!("A <#{}> csatornában mindig értesülsz a [**CFX**](https://status.cfx.re) szolgáltatások aktuális státuszáról!", config.read().await.cfx_status_channel_id))
         .footer(CreateEmbedFooter::new(BRAND_NAME_SHORT))
         .timestamp(Timestamp::now())
         .color(SUCCESS_COLOR);
@@ -105,7 +107,7 @@ async fn manage_server_status_message(ctx: Arc<Context>) {
 
     let mut embed = CreateEmbed::new()
         .title(format!("{} | Szerver Státusz", BRAND_NAME))
-        .description(format!("A <#{}> csatornában mindig értesülsz a szerver aktuális elérhetőségéről és állapotáról!", config.lock().await.status_channel_id))
+        .description(format!("A <#{}> csatornában mindig értesülsz a szerver aktuális elérhetőségéről és állapotáról!", config.read().await.status_channel_id))
         .footer(CreateEmbedFooter::new(BRAND_NAME_SHORT))
         .timestamp(Timestamp::now())
         .color(BRAND_COLOR);
@@ -178,7 +180,7 @@ async fn send_or_edit_cfx_status_message(ctx: Arc<Context>, mut embed: CreateEmb
         }
     }
 
-    let mut locked_config = config.lock().await;
+    let mut locked_config = config.write().await;
 
     let channel = ctx
         .http
@@ -192,30 +194,27 @@ async fn send_or_edit_cfx_status_message(ctx: Arc<Context>, mut embed: CreateEmb
         Some(id) => {
             let message = EditMessage::new().embed(embed);
 
-            match channel.edit_message(&ctx.http, id, message).await {
-                Ok(message) => info!(
+            if let Some(edited_message) = edit_message(&ctx.http, channel.into(), id, message).await
+            {
+                info!(
                     "Edited CFX status message with id: {}",
-                    message.id.to_string()
-                ),
-                Err(e) => error!("Error editing message: {e:?}"),
+                    edited_message.id.to_string()
+                );
             }
         }
         None => {
             let message = CreateMessage::new().embed(embed);
 
-            match channel.send_message(&ctx.http, message).await {
-                Ok(message) => {
-                    locked_config
-                        .data_json
-                        .set_cfx_status_message_id(u64::from(message.id));
-                    locked_config.data_json.save();
+            if let Some(sent_message) = send_message(&ctx.http, channel.into(), message).await {
+                locked_config
+                    .data_json
+                    .set_cfx_status_message_id(u64::from(sent_message.id));
+                locked_config.data_json.save();
 
-                    info!(
-                        "Created new CFX status message with id: {}",
-                        message.id.to_string()
-                    );
-                }
-                Err(e) => error!("Error sending message: {e:?}"),
+                info!(
+                    "Created new CFX status message with id: {}",
+                    sent_message.id.to_string()
+                );
             }
         }
     };
@@ -272,7 +271,7 @@ async fn send_or_edit_server_status_message(ctx: Arc<Context>, mut embed: Create
         }
     }
 
-    let mut locked_config = config.lock().await;
+    let mut locked_config = config.write().await;
 
     let channel = ctx
         .http
@@ -296,9 +295,12 @@ async fn send_or_edit_server_status_message(ctx: Arc<Context>, mut embed: Create
                         .label("Segítségkérés"),
                     ])]);
 
-            match channel.edit_message(&ctx.http, id, message).await {
-                Ok(message) => info!("Edited status message with id: {}", message.id.to_string()),
-                Err(e) => error!("Error editing message: {e:?}"),
+            if let Some(edited_message) = edit_message(&ctx.http, channel.into(), id, message).await
+            {
+                info!(
+                    "Edited status message with id: {}",
+                    edited_message.id.to_string()
+                );
             }
         }
         None => {
@@ -314,19 +316,16 @@ async fn send_or_edit_server_status_message(ctx: Arc<Context>, mut embed: Create
                         .label("Segítségkérés"),
                     ])]);
 
-            match channel.send_message(&ctx.http, message).await {
-                Ok(message) => {
-                    locked_config
-                        .data_json
-                        .set_status_message_id(u64::from(message.id));
-                    locked_config.data_json.save();
+            if let Some(sent_message) = send_message(&ctx.http, channel.into(), message).await {
+                locked_config
+                    .data_json
+                    .set_status_message_id(u64::from(sent_message.id));
+                locked_config.data_json.save();
 
-                    info!(
-                        "Created new status message with id: {}",
-                        message.id.to_string()
-                    );
-                }
-                Err(e) => error!("Error sending message: {e:?}"),
+                info!(
+                    "Created new status message with id: {}",
+                    sent_message.id.to_string()
+                );
             }
         }
     };
@@ -353,7 +352,7 @@ async fn get_players(ctx: &Context) -> Result<(Box<[Player]>, ServerInfo)> {
     let client_data = ctx.data.read().await;
     let (_, config) = client_data.get::<ClientData>().unwrap();
 
-    let fivem_ip = &config.lock().await.fivem_ip;
+    let fivem_ip = &config.read().await.fivem_ip;
 
     let players = reqwest::get(format!("{}/players.json", fivem_ip))
         .await?
