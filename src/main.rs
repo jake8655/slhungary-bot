@@ -2,6 +2,7 @@ use poise::samples::register_in_guild;
 use songbird::SerenityInit;
 use std::env;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::error;
 
 use dotenv::dotenv;
@@ -24,7 +25,7 @@ pub mod utils;
 pub struct ClientData {}
 
 impl TypeMapKey for ClientData {
-    type Value = (Arc<ShardManager>, Arc<Mutex<Config>>);
+    type Value = (Arc<ShardManager>, Arc<RwLock<Config>>);
 }
 
 pub const BRAND_COLOR: Color = Color::from_rgb(33, 121, 227);
@@ -46,7 +47,7 @@ async fn main() {
     let token = env::var("DISCORD_TOKEN").expect("Expected `DISCORD_TOKEN` in the environment");
 
     let config = Config::new();
-    let config_mutex = Arc::new(Mutex::new(config));
+    let config_mutex = Arc::new(RwLock::new(config));
 
     let intents = GatewayIntents::GUILDS
         | GatewayIntents::GUILD_MESSAGES
@@ -66,7 +67,7 @@ async fn main() {
         })
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
-                let guild_id = GuildId::from(config_clone.lock().await.guild_id);
+                let guild_id = GuildId::from(config_clone.read().await.guild_id);
                 register_in_guild(&ctx.http, &framework.options().commands, guild_id).await?;
 
                 // For resetting all commands when discord is bugged and has a bunch of old commands registered
