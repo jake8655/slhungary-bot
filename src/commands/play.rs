@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use poise::CreateReply;
 use serenity::{
     all::{ChannelId, ChannelType, GuildId},
@@ -78,7 +80,7 @@ pub async fn play(
             )
             .await;
 
-            handler.enqueue_input(src.into()).await;
+            handler.enqueue_with_preload(src.into(), Some(Duration::from_secs(10)));
 
             Ok(())
         }
